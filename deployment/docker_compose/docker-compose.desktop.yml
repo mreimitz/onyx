@@ -10,7 +10,7 @@
 #   (or: make desktop, from the repo root)
 #
 # This overlay:
-#   - Sets SINGLE_USER_MODE=true on the api_server and the background worker
+#   - Sets SINGLE_USER_MODE=true on the api_server, background worker and web server
 #   - Binds the published web ports to 127.0.0.1 so the open instance is not
 #     reachable from the network
 #
@@ -24,6 +24,12 @@ services:
       - SINGLE_USER_MODE=true
 
   background:
+    environment:
+      - SINGLE_USER_MODE=true
+
+  # The web server's edge auth gate expects a session cookie, which this mode
+  # never issues. It stands down when this is set.
+  web_server:
     environment:
       - SINGLE_USER_MODE=true
 

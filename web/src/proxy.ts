@@ -25,6 +25,15 @@ const PUBLIC_ROUTES = ["/auth", "/anonymous", "/_next", "/api"];
 // route, not just /nrf) and cover both Chromium and Firefox builds.
 // X-Frame-Options is omitted: it can't express the extension allowance and
 // modern browsers honor frame-ancestors.
+// Single-user mode issues no session cookie — every request is signed in as the
+// one local admin by the backend. The edge gate below is defense in depth, not
+// the authority, so it would otherwise lock the admin panel out of a deployment
+// that has no login at all. The backend still decides: if sign-in is turned on
+// later, unauthenticated requests are rejected and requireAuth() sends the
+// browser to the login page.
+const singleUserModeEnabled =
+  process.env.SINGLE_USER_MODE?.toLowerCase() === "true";
+
 const frameProtectionEnabled =
   process.env.WEB_FRAME_PROTECTION_ENABLED?.toLowerCase() !== "false";
 
@@ -132,7 +141,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith(route)
   );
 
-  if (isProtectedRoute && !isPublicRoute) {
+  if (isProtectedRoute && !isPublicRoute && !singleUserModeEnabled) {
     const authCookie = request.cookies.get(SERVER_SIDE_ONLY__AUTH_COOKIE_NAME);
 
     // Require a real auth cookie; the anonymous-user cookie must not satisfy the
