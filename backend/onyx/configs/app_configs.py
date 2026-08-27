@@ -392,6 +392,15 @@ AUTH_COOKIE_EXPIRE_TIME_SECONDS = int(
 REQUIRE_EMAIL_VERIFICATION = (
     os.environ.get("REQUIRE_EMAIL_VERIFICATION", "").lower() == "true"
 )
+
+# Single-user mode: no login screen, every request runs as one local admin account.
+# Intended for a local deployment on one machine (see docker-compose.desktop.yml).
+# This env var only seeds the stored setting on first boot; after that the stored
+# setting wins, so turning sign-in on from the UI survives a restart.
+SINGLE_USER_MODE = os.environ.get("SINGLE_USER_MODE", "").lower() == "true"
+
+# Email of the account single-user mode signs every request in as.
+SINGLE_USER_EMAIL = os.environ.get("SINGLE_USER_EMAIL") or "local@onyx.app"
 SMTP_SERVER = os.environ.get("SMTP_SERVER") or ""
 SMTP_PORT = int(os.environ.get("SMTP_PORT") or "587")
 SMTP_USER = os.environ.get("SMTP_USER") or ""

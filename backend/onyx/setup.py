@@ -2,6 +2,7 @@ import time
 
 from sqlalchemy.orm import Session
 
+from onyx.auth.users import single_user_mode_enabled
 from onyx.configs.app_configs import (
     DISABLE_INDEX_UPDATE_ON_SWAP,
     DISABLE_VECTOR_DB,
@@ -9,6 +10,7 @@ from onyx.configs.app_configs import (
     INTEGRATION_TESTS_MODE,
     MANAGED_VESPA,
     ONYX_DISABLE_VESPA,
+    SINGLE_USER_EMAIL,
     VESPA_NUM_ATTEMPTS_ON_STARTUP,
 )
 from onyx.configs.constants import KV_REINDEX_KEY
@@ -43,6 +45,7 @@ from onyx.db.search_settings import (
     update_current_search_settings,
 )
 from onyx.db.swap_index import check_and_perform_index_swap
+from onyx.db.users import get_or_create_single_user_account
 from onyx.document_index.factory import get_all_document_indices
 from onyx.document_index.interfaces_new import DocumentIndex
 from onyx.document_index.opensearch.client import (
@@ -276,6 +279,15 @@ def setup_postgres(db_session: Session) -> None:
     create_initial_public_credential(db_session)
     create_initial_default_connector(db_session)
     associate_default_cc_pair(db_session)
+
+    if single_user_mode_enabled():
+        get_or_create_single_user_account(db_session)
+        logger.warning(
+            "SINGLE USER MODE: authentication is off. Every request runs as %s "
+            "with full admin access. Only expose this deployment on a trusted "
+            "machine. Turn sign-in on from Admin Panel > Settings.",
+            SINGLE_USER_EMAIL,
+        )
 
     if GEN_AI_API_KEY and fetch_default_llm_model(db_session) is None:
         # Only for dev flows

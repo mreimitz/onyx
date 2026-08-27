@@ -1,12 +1,18 @@
 from typing import cast
 
 from fastapi import APIRouter, Depends
+from fastapi_users.exceptions import InvalidPasswordException
+from fastapi_users.password import PasswordHelper
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from onyx import __version__ as onyx_version
 from onyx.auth.permissions import require_permission
-from onyx.auth.users import is_user_admin
+from onyx.auth.users import (
+    is_user_admin,
+    single_user_mode_enabled,
+    validate_password_policy,
+)
 from onyx.configs.app_configs import (
     DEFAULT_USER_FILE_MAX_UPLOAD_SIZE_MB,
     DISABLE_VECTOR_DB,
@@ -23,6 +29,7 @@ from onyx.db.notification import (
     get_notifications,
     update_notification_last_shown,
 )
+from onyx.db.users import set_single_user_credentials
 from onyx.error_handling.error_codes import OnyxErrorCode
 from onyx.error_handling.exceptions import OnyxError
 from onyx.key_value_store.factory import get_kv_store
@@ -35,6 +42,7 @@ from onyx.server.features.notifications.models import NotificationResponse
 from onyx.server.settings.models import (
     DEFAULT_FILE_TOKEN_COUNT_THRESHOLD_K_NO_VECTOR_DB,
     DEFAULT_FILE_TOKEN_COUNT_THRESHOLD_K_VECTOR_DB,
+    DisableSingleUserModeRequest,
     Settings,
     Tier,
     UserSettings,
@@ -65,6 +73,48 @@ admin_router = APIRouter(prefix="/admin/settings")
 basic_router = APIRouter(prefix="/settings")
 
 
+@admin_router.post("/single-user-mode/disable")
+def disable_single_user_mode(
+    credentials: DisableSingleUserModeRequest,
+    current_user: User = Depends(
+        require_permission(Permission.FULL_ADMIN_PANEL_ACCESS)
+    ),
+    db_session: Session = Depends(get_session),
+) -> None:
+    """Turn sign-in on for a deployment running without it.
+
+    Sets a real email and password on the single-user account, then requires
+    authentication. Both happen together so the operator cannot end up locked out
+    of the account holding their chat history."""
+    if not single_user_mode_enabled():
+        raise OnyxError(
+            OnyxErrorCode.INVALID_INPUT,
+            "Sign-in is already required on this deployment.",
+        )
+
+    try:
+        validate_password_policy(credentials.password)
+    except InvalidPasswordException as e:
+        raise OnyxError(OnyxErrorCode.INVALID_INPUT, str(e.reason))
+
+    password_helper = PasswordHelper()
+    set_single_user_credentials(
+        db_session=db_session,
+        email=credentials.email,
+        hashed_password=password_helper.hash(credentials.password),
+    )
+
+    with settings_write_lock():
+        settings = load_settings(raise_on_error=True)
+        settings.single_user_mode_enabled = False
+        store_settings(settings)
+
+    logger.notice(
+        "Single user mode turned off by %s. Sign-in is now required.",
+        current_user.email,
+    )
+
+
 @admin_router.patch("")
 def admin_patch_settings(
     settings: Settings,
@@ -93,6 +143,14 @@ def admin_patch_settings(
                 field: getattr(settings, field) for field in settings.model_fields_set
             }
         )
+
+        # Turning sign-in on has to set credentials at the same time, which this
+        # generic patch cannot do. Route it through the dedicated endpoint.
+        if merged.single_user_mode_enabled != existing.single_user_mode_enabled:
+            raise OnyxError(
+                OnyxErrorCode.INVALID_INPUT,
+                "Change single user mode through /admin/settings/single-user-mode/disable.",
+            )
 
         if (
             merged.user_file_max_upload_size_mb is not None

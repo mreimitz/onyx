@@ -5,6 +5,7 @@ interface AuthTypeAPIResponse {
   multi_tenant: boolean;
   requires_verification: boolean;
   anonymous_user_enabled: boolean | null;
+  single_user_mode?: boolean;
   password_min_length: number;
   password_max_length: number;
   password_require_uppercase: boolean;
@@ -36,6 +37,7 @@ export async function fetchAuthTypeMetadata(
     multiTenant,
     requiresVerification: data.requires_verification,
     anonymousUserEnabled: data.anonymous_user_enabled,
+    singleUserMode: data.single_user_mode ?? false,
     passwordMinLength: data.password_min_length,
     passwordMaxLength: data.password_max_length,
     passwordRequireUppercase: data.password_require_uppercase,

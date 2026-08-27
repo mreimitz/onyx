@@ -4920,6 +4920,19 @@
           "description": "Alle melden sich ausschließlich über SSO an und registrieren sich darüber. Erfordert mindestens einen aktivierten SSO-Anbieter.",
           "title": "Anmeldung und Registrierung mit Passwort deaktivieren"
         },
+        "requireSignIn": {
+          "cancel": "Cancel",
+          "confirmLabel": "Confirm password",
+          "description": "This deployment runs without a login screen. Turn this on to require an email and password.",
+          "dialogDescription": "Set an email and password for this account. Your chats and settings stay on it.",
+          "dialogTitle": "Require sign-in",
+          "emailLabel": "Email",
+          "mismatch": "Passwords do not match.",
+          "passwordLabel": "Password",
+          "submit": "Turn on sign-in",
+          "success": "Sign-in is on. Use these credentials next time you open Onyx.",
+          "title": "Require sign-in"
+        },
         "section": {
           "title": "Authentifizierung"
         }

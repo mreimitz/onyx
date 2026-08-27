@@ -14,6 +14,7 @@ from sqlalchemy.sql.elements import ColumnElement, KeyedColumnElement
 from sqlalchemy.sql.expression import or_
 
 from onyx.auth.invited_users import remove_user_from_invited_users
+from onyx.configs.app_configs import SINGLE_USER_EMAIL
 from onyx.configs.constants import (
     ANONYMOUS_USER_EMAIL,
     DANSWER_API_KEY_DUMMY_EMAIL_DOMAIN,
@@ -741,6 +742,65 @@ def add_slack_user_if_not_exists(
         enforce_seat_check(db_session, 1)
     user = _generate_slack_user(email=email)
     db_session.add(user)
+    db_session.commit()
+    return user
+
+
+def get_or_create_single_user_account(db_session: Session) -> User:
+    """The local admin account that single-user mode signs every request in as.
+
+    Created with an unusable random password: sign-in is off while the mode is on,
+    and turning it on sets a real password on this same row so chat history stays
+    with the account."""
+    user = get_user_by_email(SINGLE_USER_EMAIL, db_session)
+    if user is not None:
+        return user
+
+    user = User(
+        email=SINGLE_USER_EMAIL,
+        hashed_password=_generate_password_hash(),
+        is_active=True,
+        is_verified=True,
+        account_type=AccountType.STANDARD,
+    )
+    db_session.add(user)
+    try:
+        db_session.flush()
+        assign_user_to_default_groups__no_commit(db_session, user, is_admin=True)
+        db_session.commit()
+        return user
+    except IntegrityError:
+        db_session.rollback()
+        concurrent_user = get_user_by_email(SINGLE_USER_EMAIL, db_session)
+        if concurrent_user is None:
+            raise
+        return concurrent_user
+
+
+def set_single_user_credentials(
+    db_session: Session, email: str, hashed_password: str
+) -> User:
+    """Give the single-user account a real email and password.
+
+    Used when an operator turns sign-in on: the credentials land on the existing
+    row so the account keeps its chat history, projects and settings."""
+    user = get_user_by_email(SINGLE_USER_EMAIL, db_session)
+    if user is None:
+        raise OnyxError(
+            OnyxErrorCode.NOT_FOUND,
+            "No single-user account exists on this deployment.",
+        )
+
+    conflicting = get_user_by_email(email, db_session)
+    if conflicting is not None and conflicting.id != user.id:
+        raise OnyxError(
+            OnyxErrorCode.INVALID_INPUT,
+            f"Another account already uses {email}.",
+        )
+
+    user.email = email
+    user.hashed_password = hashed_password
+    user.is_verified = True
     db_session.commit()
     return user
 

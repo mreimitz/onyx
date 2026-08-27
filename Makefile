@@ -1,4 +1,16 @@
-.PHONY: craft-up craft-down craft-sandbox-image craft-backend-image craft-refresh-images craft-check-images
+.PHONY: craft-up craft-down craft-sandbox-image craft-backend-image craft-refresh-images craft-check-images desktop desktop-down
+
+# Local single-user Onyx: no login screen, ports bound to localhost only.
+# See deployment/docker_compose/docker-compose.desktop.yml.
+desktop:
+	docker compose -f deployment/docker_compose/docker-compose.yml \
+	               -f deployment/docker_compose/docker-compose.desktop.yml \
+	               --project-directory deployment/docker_compose up -d --wait
+
+desktop-down:
+	docker compose -f deployment/docker_compose/docker-compose.yml \
+	               -f deployment/docker_compose/docker-compose.desktop.yml \
+	               --project-directory deployment/docker_compose down
 
 craft-up:
 	deployment/helm/dev/craft-up.sh

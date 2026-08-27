@@ -36,6 +36,11 @@ export default async function Page(props: PageProps) {
     console.log(`Some fetch failed for the login page - ${e}`);
   }
 
+  // single user mode has no sign-in: send anyone who lands here back to the app
+  if (authTypeMetadata?.singleUserMode) {
+    return redirect("/");
+  }
+
   // if there are no users, send self-hosted deployments to signup for
   // initial setup
   if (

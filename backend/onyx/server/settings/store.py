@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from onyx.cache.factory import get_cache_backend
+from onyx.cache.interface import CacheBackend
 from onyx.cache.locks import cache_shared_lock
 from onyx.configs.app_configs import (
     DEFAULT_USER_FILE_MAX_UPLOAD_SIZE_MB,
@@ -12,6 +13,7 @@ from onyx.configs.app_configs import (
     MAX_ALLOWED_UPLOAD_SIZE_MB,
     ONYX_QUERY_HISTORY_TYPE,
     SHOW_EXTRA_CONNECTORS,
+    SINGLE_USER_MODE,
 )
 from onyx.configs.constants import KV_SETTINGS_KEY, OnyxRedisLocks
 from onyx.key_value_store.factory import get_kv_store
@@ -22,6 +24,7 @@ from onyx.server.settings.models import (
     Settings,
 )
 from onyx.utils.logger import setup_logger
+from shared_configs.configs import MULTI_TENANT
 from shared_configs.contextvars import get_current_tenant_id
 
 logger = setup_logger()
@@ -46,6 +49,21 @@ def settings_write_lock() -> Iterator[None]:
         logger=logger,
     ):
         yield
+
+
+def _mirror_single_user_mode_to_cache(
+    cache: CacheBackend, enabled: bool | None
+) -> None:
+    """Keep the resolved flag in the cache so the auth path can read it per request
+    without touching the KV store."""
+    try:
+        cache.set(
+            OnyxRedisLocks.SINGLE_USER_MODE_ENABLED,
+            "1" if enabled else "0",
+            ex=SETTINGS_TTL,
+        )
+    except Exception as e:
+        logger.error("Error caching single user mode setting: %s", str(e))
 
 
 def load_settings(raise_on_error: bool = False) -> Settings:
@@ -81,6 +99,14 @@ def load_settings(raise_on_error: bool = False) -> Settings:
         anonymous_user_enabled = False
 
     settings.anonymous_user_enabled = anonymous_user_enabled
+
+    # Multi-tenant deployments never run without authentication.
+    if MULTI_TENANT:
+        settings.single_user_mode_enabled = False
+    elif settings.single_user_mode_enabled is None:
+        settings.single_user_mode_enabled = SINGLE_USER_MODE
+    _mirror_single_user_mode_to_cache(cache, settings.single_user_mode_enabled)
+
     if settings.query_history_type is None:
         settings.query_history_type = ONYX_QUERY_HISTORY_TYPE
 
@@ -130,5 +156,8 @@ def store_settings(settings: Settings) -> None:
             "1" if settings.anonymous_user_enabled else "0",
             ex=SETTINGS_TTL,
         )
+
+    if settings.single_user_mode_enabled is not None:
+        _mirror_single_user_mode_to_cache(cache, settings.single_user_mode_enabled)
 
     get_kv_store().store(KV_SETTINGS_KEY, settings.model_dump())

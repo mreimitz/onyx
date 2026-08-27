@@ -11,7 +11,11 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from onyx import __version__
-from onyx.auth.users import anonymous_user_enabled, user_needs_to_be_verified
+from onyx.auth.users import (
+    anonymous_user_enabled,
+    single_user_mode_enabled,
+    user_needs_to_be_verified,
+)
 from onyx.configs.app_configs import OAUTH_ENABLED
 from onyx.configs.constants import (
     DEV_VERSION_PATTERN,
@@ -224,6 +228,7 @@ async def get_auth_type(response: Response) -> AuthConfigResponse:
         multi_tenant=MULTI_TENANT,
         requires_verification=user_needs_to_be_verified(),
         anonymous_user_enabled=anonymous_user_enabled(),
+        single_user_mode=single_user_mode_enabled(),
         password_min_length=security.password_min_length,
         password_max_length=security.password_max_length,
         password_require_uppercase=security.password_require_uppercase,

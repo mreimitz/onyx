@@ -122,6 +122,7 @@ from onyx.db.api_key import fetch_api_key_auth_result
 from onyx.db.auth import (
     get_access_token_db,
     get_default_admin_user_emails,
+    get_single_user,
     get_user_count,
     get_user_db,
 )
@@ -281,6 +282,64 @@ def user_needs_to_be_verified() -> bool:
     # SSO-provisioned users are created is_verified, so this only ever bites
     # password signups.
     return REQUIRE_EMAIL_VERIFICATION
+
+
+def validate_password_policy(password: str) -> None:
+    """Check a password against the workspace policy.
+
+    Raises InvalidPasswordException on failure. Shared by the fastapi-users
+    manager and by any endpoint that sets a password outside that flow."""
+    settings = get_security_settings()
+    if len(password) < settings.password_min_length:
+        raise exceptions.InvalidPasswordException(
+            reason=f"Password must be at least {settings.password_min_length} characters long."
+        )
+    if len(password) > settings.password_max_length:
+        raise exceptions.InvalidPasswordException(
+            reason=f"Password must not exceed {settings.password_max_length} characters."
+        )
+    if settings.password_require_uppercase and not any(
+        char.isupper() for char in password
+    ):
+        raise exceptions.InvalidPasswordException(
+            reason="Password must contain at least one uppercase letter."
+        )
+    if settings.password_require_lowercase and not any(
+        char.islower() for char in password
+    ):
+        raise exceptions.InvalidPasswordException(
+            reason="Password must contain at least one lowercase letter."
+        )
+    if settings.password_require_digit and not any(char.isdigit() for char in password):
+        raise exceptions.InvalidPasswordException(
+            reason="Password must contain at least one number."
+        )
+    if settings.password_require_special_char and not any(
+        char in PASSWORD_SPECIAL_CHARS for char in password
+    ):
+        raise exceptions.InvalidPasswordException(
+            reason=f"Password must contain at least one special character from the following set: {PASSWORD_SPECIAL_CHARS}."
+        )
+    return
+
+
+def single_user_mode_enabled(*, tenant_id: str | None = None) -> bool:
+    """Whether every request runs as the one local admin account.
+
+    Read on the hot auth path, so it goes through the cache. A cache miss falls
+    back to the stored settings (which re-seed the cache) rather than to the env
+    var, so an operator who turned sign-in on never has it silently reverted."""
+    if MULTI_TENANT:
+        return False
+
+    from onyx.cache.factory import get_cache_backend
+
+    cache = get_cache_backend(tenant_id=tenant_id)
+    value = cache.get(OnyxRedisLocks.SINGLE_USER_MODE_ENABLED)
+    if value is not None:
+        return int(value.decode("utf-8")) == 1
+
+    return bool(load_settings().single_user_mode_enabled)
 
 
 def anonymous_user_enabled(*, tenant_id: str | None = None) -> bool:
@@ -893,40 +952,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     async def validate_password(  # ty: ignore[invalid-method-override]
         self, password: str, _: schemas.UC | models.UP
     ) -> None:
-        settings = get_security_settings()
-        if len(password) < settings.password_min_length:
-            raise exceptions.InvalidPasswordException(
-                reason=f"Password must be at least {settings.password_min_length} characters long."
-            )
-        if len(password) > settings.password_max_length:
-            raise exceptions.InvalidPasswordException(
-                reason=f"Password must not exceed {settings.password_max_length} characters."
-            )
-        if settings.password_require_uppercase and not any(
-            char.isupper() for char in password
-        ):
-            raise exceptions.InvalidPasswordException(
-                reason="Password must contain at least one uppercase letter."
-            )
-        if settings.password_require_lowercase and not any(
-            char.islower() for char in password
-        ):
-            raise exceptions.InvalidPasswordException(
-                reason="Password must contain at least one lowercase letter."
-            )
-        if settings.password_require_digit and not any(
-            char.isdigit() for char in password
-        ):
-            raise exceptions.InvalidPasswordException(
-                reason="Password must contain at least one number."
-            )
-        if settings.password_require_special_char and not any(
-            char in PASSWORD_SPECIAL_CHARS for char in password
-        ):
-            raise exceptions.InvalidPasswordException(
-                reason=f"Password must contain at least one special character from the following set: {PASSWORD_SPECIAL_CHARS}."
-            )
-        return
+        validate_password_policy(password)
 
     @log_function_time(print_only=True)
     async def oauth_callback(  # ty: ignore[invalid-method-override]
@@ -2188,6 +2214,17 @@ async def _resolve_optional_user(
             OnyxErrorCode.INSUFFICIENT_PERMISSIONS,
             "This token's scopes do not permit this endpoint.",
         )
+
+    if user is None and single_user_mode_enabled():
+        # No login screen in this mode: every unauthenticated request runs as the
+        # one local admin account. It is a real row, so per-user features behave
+        # normally.
+        user = await get_single_user(async_db_session)
+        if user is not None:
+            request.state.usage_credential = UsageCredentialIdentity(
+                UsageCredentialType.SESSION
+            )
+            return user
 
     if user is not None:
         await _maybe_refresh_oauth_tokens(user, async_db_session, user_manager)

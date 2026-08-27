@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import Session
 
+from onyx.configs.app_configs import SINGLE_USER_EMAIL
 from onyx.configs.constants import ANONYMOUS_USER_EMAIL, NO_AUTH_PLACEHOLDER_USER_EMAIL
 from onyx.db.api_key import get_api_key_email_pattern
 from onyx.db.engine.async_sql_engine import (
@@ -85,6 +86,13 @@ def get_live_users_count(db_session: Session) -> int:
     if user_count is None:
         raise RuntimeError("Was not able to fetch the user count.")
     return user_count
+
+
+async def get_single_user(async_db_session: AsyncSession) -> User | None:
+    """The local account that single-user mode signs every request in as."""
+    return await async_db_session.scalar(
+        select(User).where(func.lower(User.email) == func.lower(SINGLE_USER_EMAIL))
+    )
 
 
 async def get_user_count(only_admin_users: bool = False) -> int:

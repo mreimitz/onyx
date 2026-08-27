@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from onyx.configs.app_configs import (
     DEFAULT_PRUNING_FREQ,
@@ -48,6 +48,9 @@ class Settings(BaseModel):
     application_status: ApplicationStatus = ApplicationStatus.ACTIVE
     anonymous_user_enabled: bool | None = None
     invite_only_enabled: bool = False
+    # None = never decided, so the SINGLE_USER_MODE env var seeds it. Once an
+    # explicit value is stored it wins, so turning sign-in on survives a restart.
+    single_user_mode_enabled: bool | None = None
     deep_research_enabled: bool | None = None
     multi_model_chat_enabled: bool | None = True
     search_ui_enabled: bool | None = True
@@ -149,3 +152,10 @@ class UserSettings(Settings):
     # PostHog client key + host for the web app; None = analytics off.
     posthog_key: str | None = None
     posthog_host: str | None = None
+
+
+class DisableSingleUserModeRequest(BaseModel):
+    """Credentials to put on the single-user account before sign-in is turned on."""
+
+    email: EmailStr
+    password: str

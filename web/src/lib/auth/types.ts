@@ -19,6 +19,8 @@ export interface AuthTypeMetadata {
   multiTenant: boolean;
   requiresVerification: boolean;
   anonymousUserEnabled: boolean | null;
+  // No login screen: every request runs as the one local admin account.
+  singleUserMode: boolean;
   passwordMinLength: number;
   passwordMaxLength: number;
   passwordRequireUppercase: boolean;

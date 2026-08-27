@@ -22,6 +22,7 @@ import {
   toast,
 } from "@opal/layouts";
 import { Card, InputTypeIn, Switch, Text } from "@opal/components";
+import RequireSignInModal from "@/views/admin/RequireSignInModal";
 import { markdown } from "@opal/utils";
 import { useSettings } from "@/lib/settings/hooks";
 import { Settings, toSettings } from "@/lib/settings/types";
@@ -153,6 +154,7 @@ export default function SecurityHardeningPage() {
   const isMultiTenant = NEXT_PUBLIC_CLOUD_ENABLED;
   const { authTypeMetadata, isLoading: authTypeLoading } =
     useAuthTypeMetadata();
+  const [requireSignInOpen, setRequireSignInOpen] = useState(false);
   // Single-tenant at runtime, not just by build flag. The explicit === false
   // waits for the fetch, metadata is undefined while loading or unreachable.
   const isSingleTenantRuntime =
@@ -373,6 +375,20 @@ export default function SecurityHardeningPage() {
 
               {!isMultiTenant && (
                 <>
+                  {isSingleTenantRuntime &&
+                    authTypeMetadata?.singleUserMode && (
+                      <ToggleRow
+                        title={t("authentication.requireSignIn.title")}
+                        description={t(
+                          "authentication.requireSignIn.description"
+                        )}
+                        checked={false}
+                        onCheckedChange={(checked) => {
+                          if (checked) setRequireSignInOpen(true);
+                        }}
+                      />
+                    )}
+
                   {isSingleTenantRuntime && (
                     <ToggleRow
                       title={t("authentication.openSignUp.title")}
@@ -864,6 +880,15 @@ export default function SecurityHardeningPage() {
           </Card>
         </div>
       </SettingsLayouts.Body>
+
+      <RequireSignInModal
+        open={requireSignInOpen}
+        onOpenChange={setRequireSignInOpen}
+        onSuccess={() => {
+          // The next page load hits the login screen.
+          window.location.reload();
+        }}
+      />
     </SettingsLayouts.Root>
   );
 }

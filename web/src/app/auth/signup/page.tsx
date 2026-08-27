@@ -38,6 +38,11 @@ const Page = async (props: {
     console.log(`Some fetch failed for the login page - ${e}`);
   }
 
+  // single user mode has no registration: send anyone who lands here back to the app
+  if (authTypeMetadata?.singleUserMode) {
+    return redirect("/app");
+  }
+
   // if user is already logged in, take them to the main app page
   if (currentUser && currentUser.is_active && !currentUser.is_anonymous_user) {
     if (!authTypeMetadata?.requiresVerification || currentUser.is_verified) {

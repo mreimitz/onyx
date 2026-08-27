@@ -70,6 +70,8 @@ class AuthConfigResponse(BaseModel):
     # users to have verified emails
     requires_verification: bool
     anonymous_user_enabled: bool | None = None
+    # No login screen: every request runs as the one local admin account.
+    single_user_mode: bool = False
     password_min_length: int
     password_max_length: int
     password_require_uppercase: bool = False

@@ -1,0 +1,33 @@
+# =============================================================================
+# ONYX DESKTOP — LOCAL SINGLE-USER OVERLAY
+# =============================================================================
+# Runs Onyx on one machine with no login screen. Every request runs as one local
+# admin account; the app asks for a display name on first use. Turn sign-in on
+# later from Admin Panel > Security > Require sign-in.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.desktop.yml up -d
+#   (or: make desktop, from the repo root)
+#
+# This overlay:
+#   - Sets SINGLE_USER_MODE=true on the api_server and the background worker
+#   - Binds the published web ports to 127.0.0.1 so the open instance is not
+#     reachable from the network
+#
+# SECURITY: while single-user mode is on, anyone who can reach the web port has
+# full admin access. Do not use this overlay on a shared or public host, and do
+# not publish these ports through a tunnel or reverse proxy.
+
+services:
+  api_server:
+    environment:
+      - SINGLE_USER_MODE=true
+
+  background:
+    environment:
+      - SINGLE_USER_MODE=true
+
+  nginx:
+    ports: !override
+      - "127.0.0.1:${HOST_PORT_80:-80}:80"
+      - "127.0.0.1:${HOST_PORT:-3000}:80"

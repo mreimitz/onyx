@@ -4920,6 +4920,19 @@
           "description": "모든 사용자가 SSO로만 로그인하고 가입합니다. 활성화된 SSO 제공자가 하나 이상 필요합니다.",
           "title": "비밀번호 로그인 및 가입 비활성화"
         },
+        "requireSignIn": {
+          "cancel": "Cancel",
+          "confirmLabel": "Confirm password",
+          "description": "This deployment runs without a login screen. Turn this on to require an email and password.",
+          "dialogDescription": "Set an email and password for this account. Your chats and settings stay on it.",
+          "dialogTitle": "Require sign-in",
+          "emailLabel": "Email",
+          "mismatch": "Passwords do not match.",
+          "passwordLabel": "Password",
+          "submit": "Turn on sign-in",
+          "success": "Sign-in is on. Use these credentials next time you open Onyx.",
+          "title": "Require sign-in"
+        },
         "section": {
           "title": "인증"
         }
